@@ -54,4 +54,5 @@ dir.create("data", FALSE)
 d %>%
   select(Participant, data2) %>%
   unnest(data2) %>%
+  mutate(Answer = as.integer(Answer) - 1) %>%
   write_rds("data/dataset-synthetic.rds", compress = "gz")
