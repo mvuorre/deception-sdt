@@ -1,0 +1,27 @@
+---
+title: "Signal Detection Theory Tutorial"
+author: "Matti Vuorre & Mircea Zloteanu"
+format: gfm
+---
+
+<!-- The source code for this document is README.qmd -->
+
+# Preface
+
+This [Quarto](https://quarto.org/) document contains the code presented in our manuscript TBD (TBD). You can download and run it in RStudio to reproduce the analyses in our manuscript.
+
+# R environment
+
+First, ensure that your current working directory contains both the analysis script and the data file. If you use RStudio, the easiest thing to do is to open up the relevant R Project (`deception-sdt.Rproj`) in RStudio.
+
+Then, make sure that you have the required R packages installed. We have used [renv](https://rstudio.github.io/renv/articles/collaborating.html) to ensure that you can install and use the exact same versions of the packages. To install those packages (you only need to do this once), execute `renv::restore()` in the R console.
+
+You can now load the required packages
+
+```{r}
+library(brms) # Bayesian modelling
+library(emmeans) # Model summaries
+library(tidyverse) # Data wrangling and plotting
+
+```
+
