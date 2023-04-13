@@ -5,6 +5,7 @@
 
 # Libraries: synthpop for creating synthetic data
 library(tidyverse)
+library(brms)
 library(synthpop)
 
 # Load data
@@ -26,33 +27,23 @@ d <- d %>%
       labels = c("Affective", "Experiential")
     ),
     Veracity = factor(Veracity, levels = 0:1, labels = c("False", "True")),
-    Answer = factor(Answer)
+    Answer = Answer
   ) %>%
   select(Participant, Training, Stimulus, LieType, Veracity, Answer)
 
+contrasts(d$Veracity) <- c(-0.5, 0.5)
+d$Training <- fct_relevel(d$Training, "None")
 
-# Create a synthetic dataset for each participant.
-# Doing this by participant is much faster and avoids complexities.
-# The only variable that needs to be synthesized is `Answer`,
-# because all others are determined by experimenter.
-d <- d %>%
-  nest(.by = Participant) %>%
-  mutate(
-    data2 = map(
-      data,
-      ~syn(
-        data = .x,
-        method = c("constant", "", "", "", "cart")
-      ) %>%
-        .[["syn"]] %>%
-        tibble()
-    )
-  )
-
-# Write synthetic dataset to disk
-dir.create("data", FALSE)
-d %>%
-  select(Participant, data2) %>%
-  unnest(data2) %>%
-  mutate(Answer = as.integer(Answer) - 1) %>%
-  write_rds("data/dataset-synthetic.rds", compress = "gz")
+fit <- brm(
+  Answer ~ 1 + Veracity * Training * LieType + (1 + Veracity * LieType | Participant) + (1 | Stimulus),
+  family = bernoulli(link = probit_approx),
+  init = "0",
+  data = d,
+  backend = "cmdstanr",
+  threads = 2,
+  cores = 8
+)
+fit <- m2
+summary(fit)
+d$Answer <- posterior_predict(fit, ndraws = 1)[1,]
+write_rds(d, "data/dataset-synthetic.rds", compress = "gz")
