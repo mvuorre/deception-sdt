@@ -1,0 +1,495 @@
+---
+title: How to Analyse Deception Data with Bayesian Signal Detection Theoretic Models
+description: Code supplement to TBD
+author: 
+  - Mircea Zloteanu
+  - Matti Vuorre
+date: 2023-04-20
+format: 
+  html:
+    toc: true
+---
+
+<!-- The source code for this document is README.qmd -->
+
+# Preface
+
+This document details the R code discussed in TBD (TBD) in more detail. You can download and run this [Quarto](https://quarto.org/) script in [RStudio](https://posit.co/downloads/) to reproduce the analyses in our manuscript.
+
+This is an example of how to analyze binary (e.g. "lie" / "truth") judgments using an SDT framework, and how to implement it in practice using bayesian GLMMs in R.
+
+:::{.callout-note}
+**The benefits of analysing the judgments using SDT, instead of simple percentage correct, are**    
+- 🍹
+
+**The benefits of using bayesian GLMMs to estimate SDT models are**   
+- 🧙‍♀️
+:::
+
+# R environment
+
+First, ensure that your current working directory contains both the analysis script and the data file. If you use RStudio, the easiest thing to do is to open up the relevant R Project (`deception-sdt.Rproj`) in RStudio.
+
+Then, make sure that you have the required R packages installed. We use [renv](https://rstudio.github.io/renv/articles/collaborating.html) to ensure that you can install and use the exact same versions of the packages. To install those packages, execute `renv::restore()` in the R console (you only need to do this once).
+
+You can now load the required packages
+
+```{r}
+#| message: false
+library(knitr)
+library(brms)
+library(emmeans)
+library(ggbeeswarm)
+library(ggstance)
+library(patchwork)
+library(scales)
+library(posterior)
+library(tidybayes)
+library(parameters)
+library(ggpp)
+library(tidyverse)
+```
+
+We then set a common theme for figures.
+
+```{r}
+#| message: false
+theme_set(
+  theme_linedraw() +
+    theme(panel.grid = element_blank())
+)
+bayesplot::color_scheme_set(scheme = "brewer-Spectral")
+```
+
+Next we set options for the bayesian model estimation procedures. We use as many cores as possible, the faster [cmdstanr](https://mc-stan.org/cmdstanr/) backend, and multithreading if enough cores are available.
+
+```{r}
+#| message: false
+options(
+  mc.cores = parallel::detectCores(logical = FALSE),
+  brms.backend = ifelse(require(cmdstanr), "cmdstanr", "rstan"),
+  brms.threads = parallel::detectCores(logical = FALSE) %/% 4
+)
+dir.create("models", FALSE)
+```
+
+# Preliminaries
+
+## Data
+
+For this tutorial, we use a synthetic copy of data discussed in XYZ. Note that all categorical predictors are R factors, and the outcome is an integer or float (0s and 1s).
+
+```{r}
+d <- read_rds("data/dataset-synthetic.rds")
+head(d)
+```
+
+- `Training` is a between-subjects variable indicating which training group the participant was in,
+- `LieType` is a within-subjects variable; what type of lie was presented on the trial
+- `Stimulus` indicates which stimulus was presented
+- `Veracity` indicates the stimulus veracity (True or False)
+- `Answer` is the DV, as each answer participants give; truth=1, lie=0
+
+## Non-SDT analysis
+
+We first analyse these data with correct/incorrect classifications
+
+```{r}
+d <- d %>% 
+  mutate(
+    accuracy = as.integer(as.integer(Veracity) - 1 == Answer)
+  )
+head(d)
+```
+
+```{r}
+d %>% 
+  summarise(accuracy = mean(accuracy), .by = Participant) %>%
+  ggplot(aes(accuracy)) +
+  scale_x_continuous(
+    "Percent correct",
+    limits = c(0, 1),
+    labels = percent
+  ) +
+  scale_y_continuous(
+    "Frequency",
+    expand = expansion(c(0.01, 0.1))
+  ) +
+  geom_hline(
+    yintercept = 0
+  ) +
+  geom_histogram(binwidth = 0.01, col = "black", fill = "white", boundary = 0) +
+  geom_boxplot(aes(y = -0.5)) |
+  d %>% 
+  summarise(accuracy = mean(accuracy), .by = c(Participant, Training, LieType)) %>%
+  ggplot(aes(accuracy)) +
+  scale_x_continuous(
+    "Percent correct",
+    limits = c(0, 1),
+    labels = percent
+  ) +
+  scale_y_continuous(
+    "Frequency",
+    expand = expansion(c(0.01, 0.1))
+  ) +
+  geom_hline(
+    yintercept = 0
+  ) +
+  geom_histogram(binwidth = 0.01, col = "black", fill = "white", boundary = 0) +
+  geom_boxplot(aes(y = -0.5)) +
+  facet_grid(Training~LieType)
+```
+
+On average, participants are at chance
+
+## Basic SDT analysis
+
+Given these data, it is easy to classify each response and then calculate SDT measures like dprime and criterion
+
+```{r}
+# Classify trials
+sdt <- d %>% 
+  mutate(
+    Type = case_when(
+      Veracity == "False" & Answer == 1 ~ "fa",
+      Veracity == "False" & Answer == 0 ~ "cr",
+      Veracity == "True" & Answer == 1 ~ "hit",
+      Veracity == "True" & Answer == 0 ~ "miss",
+    )
+  )
+# Aggregate per participant
+sdt <- sdt %>% 
+  count(Participant, Type) %>% 
+  pivot_wider(names_from = Type, values_from = n)
+
+# Calculate measures
+sdt <- sdt %>% 
+  mutate(
+    hr = hit / (hit + miss),
+    far = fa / (fa + cr),
+    zhr = qnorm(hr),
+    zfa = qnorm(far),
+    dprime = zhr - zfa,
+    c = -zfa,
+    bias = -0.5 * (zhr + zfa)
+  )
+head(sdt)
+sdt %>% 
+  summarise(across(-Participant, mean))
+```
+
+We can then compute basic statistical tests on these person-specific parameters. For example, we can ask whether sensitivity (dprime) was greater than zero
+
+```{r}
+t.test(sdt$dprime) %>% 
+  parameters()
+```
+
+Or visualize the participants' parameters. Note that there were very few trials per participant, thus many participants will have identical parameter estimates. We therefore reduce overplotting by jittering the points a little bit.
+
+```{r}
+sdt %>% 
+  ggplot(aes(bias, dprime)) +
+  geom_hline(yintercept = 0, lty = 2, linewidth = .33) +
+  geom_vline(xintercept = 0, lty = 2, linewidth = .33) +
+  labs(x = "Bias", y = "Sensitivity") +
+  geom_point(
+    shape = 1, 
+    position = position_jitter(.01, .01)
+  ) +
+  stat_centroid(
+    .fun = mean, col = "red",
+    geom = "point", size = 2
+  )
+```
+
+
+# Model 0
+
+Above, we used traditional methods and formulas for calculating SDT parameters for each participant. We can get equivalent average and participant-specific parameters more efficiently with a GLMM. 
+
+## Coding of predictor variables
+
+We first need to ensure the categorical predictors are appropriately coded. We "contrast-code" `Veracity`. This ensures the model intercept is "between" false and true trials.
+
+```{r}
+contrasts(d$Veracity) <- c(-0.5, 0.5)
+contrasts(d$Veracity)
+```
+
+## Model specification
+
+We then define the GLMM as a mixed effects formula in R's extended formula syntax. The formula is wrapped in `bf()`, which is used by the brms package, below.
+
+```{r}
+f0 <- bf(Answer ~ 1 + Veracity + (1 + Veracity | Participant) + (1 | Stimulus))
+```
+
+This model is parameterized such that there will be two main parameters: The intercept describes the location of the latent variable for average trials. The slope of Veracity indicates sensitivity--the separation of the latent variables between true and false trials.
+
+## Prior distribution
+
+Although it is optional, for illustrative purposes we define some vaguely informative prior distributions on the population-level parameters
+
+```{r}
+p0 <- c(
+  prior(normal(0, 1), class = b),
+  prior(student_t(3, 0, 1), class = sd),
+  prior(lkj(1), class = cor)
+)
+```
+
+## Sampling
+
+With the model formula, data, and prior distribution, we can then sample from the model's posterior distribution
+
+```{r}
+m0 <- brm(
+  f0,  
+  family = bernoulli(link = probit),
+  data = d,
+  prior = p0,
+  file = "models/m0"
+)
+```
+
+It is good practice to then check model convergence. For simple models there almost never are any issues. The simplest way to do this is to visually see whether the four chains of samples are well mixed:
+
+```{r}
+mcmc_plot(m0, type = "trace")
+```
+
+Similarly, we want to see evidence that the model is able to reproduce the observed data:
+
+```{r}
+pp_check(m0, type = "bars_grouped", group = "Veracity", ndraws = 100) + 
+  scale_x_continuous(breaks = c(0, 1), labels = c("False", "True"))
+```
+
+## Model summary
+
+After confirming that the model estimation algorithm has converged, and that the model doesn't have glaring errors in reproducing the data, we can proceed to interpret the estimates.
+
+Since we coded Veracity with contrast codes (-0.5, 0.5), the regression coefficients describe bias (-Intercept) and d-prime (slope):
+
+```{r}
+parameters(m0)
+```
+
+The above numbers are the posterior means and 95%CIs. Those are calculated from the samples we drew from the posterior distribution using `brm()` above. Those samples can also be visualized
+
+```{r}
+gather_draws(m0, b_Intercept, b_Veracity1) %>% 
+  ggplot(aes(.value, .variable)) +
+  stat_halfeye()
+```
+
+
+## Alternative parameterisation
+
+The above parameterisation is the most straightforward and produces parameter estimates that directly reflect (negative) bias and d-prime. However, complications with priors... It is then often beneficial to reparameterize the model such that the population level parameters indicate means of the latent variable for each level of veracity
+
+```{r}
+f0a <- bf(Answer ~ 0 + Veracity + (0 + Veracity | Participant) + (1 | Stimulus))
+m0a <- brm(
+  f0a,  
+  family = bernoulli(link = probit),
+  data = d,
+  file = "models/m0a"
+)
+parameters(m0a)
+```
+
+This ensures using the same prior on the two veracity conditions' latent variable, and can be easily queried for dprime and bias
+
+```{r}
+as_draws_df(m0a, variable = "b_", regex = TRUE) %>% 
+  mutate(
+    dprime = b_VeracityTrue - b_VeracityFalse,
+    crit = -b_VeracityFalse,
+    bias = -0.5 * (b_VeracityTrue + b_VeracityFalse)
+  ) %>% 
+  parameters()
+```
+
+## ROCs
+
+People sometimes like talking about the receiver operating characteristic and area under the curve measures. At least they allow for nice plots (but those require some hairy code).
+
+The ROC plots hit rates against false alarm rates for varying threshold levels. However, we only get one threshold (per participant):
+
+```{r}
+sdt %>% 
+  ggplot(aes(far, hr)) +
+  geom_abline(lty = 2, linewidth = .33) +
+  scale_x_continuous(
+    "False alarm rate",
+    limits = c(0, 1),
+    expand = expansion(0.01)
+  ) +
+  scale_y_continuous(
+    "Hit rate",
+    limits = c(0, 1),
+    expand = expansion(0.01)
+  ) +
+  geom_point(
+    shape = 1,
+    position = position_jitter(.01, .01)
+  ) +
+  stat_centroid(
+    .fun = mean, col = "red",
+    geom = "point", size = 2
+  ) +
+  theme(aspect.ratio = 1)
+```
+
+One solution to this is to plot the estimated hit rate for all false alarm rates. We do so here for the average participant. We display 100 random ROCs from the posterior to display uncertainty. NOTE: this is weird because of the poor performance wtf.
+
+```{r}
+grid <- tibble(
+  x = seq(-2.5, 2.5, length.out = 30),
+  far = pnorm(x, lower = FALSE),
+  zfar = qnorm(far)
+)
+
+as_draws_df(m0a) %>% 
+  slice_sample(n = 100) %>% 
+  select(starts_with("b_")) %>% 
+  rownames_to_column("i") %>% 
+  crossing(grid) %>% 
+  mutate(hr = pnorm(x, b_VeracityTrue - b_VeracityFalse, lower = FALSE)) %>% 
+  ggplot(aes(far, hr)) +
+  geom_abline(lty = 2, linewidth = .33) +
+  scale_x_continuous(
+    "False alarm rate",
+    limits = c(0, 1),
+    expand = expansion(0.01)
+  ) +
+  scale_y_continuous(
+    "Hit rate",
+    limits = c(0, 1),
+    expand = expansion(0.01)
+  ) +
+  geom_line(
+    aes(group = i), 
+    alpha = .25,
+    linewidth = .33
+    )
+```
+
+
+# Model 1
+
+We then proceed to a more complex model, and ask whether bias or sensitivity differ between the training groups. To do so, we can simply enter Training as a main effect and interaction with Veracity.
+
+```{r}
+f1 <- bf(Answer ~ 1 + Veracity * Training + (1 + Veracity | Participant) + (1 | Stimulus))
+m1 <- brm(
+  f1,  
+  family = bernoulli(link = probit),
+  data = d,
+  file = "models/m1"
+)
+```
+
+The default parameterization, and adding Training with dummy contrasts, leads to an intercept that is the location of the latent variable for average veracity, differences in that between baseline Training and the two other groups, and dprime for the baseline group. The interaction terms then indicate differences in dprime for the two other groups vs baseline group.
+
+```{r}
+parameters(m1)
+```
+
+Although priors here can make a difference, we can use emmeans to get differences in quantities between groups
+
+```{r}
+# Dprimes for three groups
+emmeans(m1, ~Veracity | Training) %>% 
+  contrast("revpairwise") %>% 
+  parameters()
+
+# Negative bias for three groups
+emmeans(m1, ~Training) %>% 
+  parameters()
+```
+
+## Alternative parameterization
+
+It is better to parameterize the model such that we get the quantities directly, rather than intercepts and differences, because then the priors wont impact the conditional quantities.
+
+```{r}
+f1a <- bf(Answer ~ 0 + Training / Veracity + (0 + Veracity | Participant) + (1 | Stimulus))
+m1a <- brm(
+  f1a,  
+  family = bernoulli(link = probit),
+  data = d,
+  file = "models/m1a"
+)
+```
+
+Notice how the estimated parameters now directly reflect the quantities that we used emmeans for, above. The three first parameters are negative biases for the groups, the latter three are dprimes for the groups.
+
+```{r}
+parameters(m1a)
+```
+
+
+# Model 2
+
+Finally, we include the within-person manipulation LieType as well.
+
+```{r}
+f2 <- bf(Answer ~ 1 + Veracity * Training * LieType + (1 + Veracity * LieType | Participant) + (1 | Stimulus))
+m2 <- brm(
+  f2,  
+  family = bernoulli(link = probit),
+  data = d,
+  file = "models/m2"
+)
+```
+
+```{r}
+parameters(m2)
+```
+
+```{r}
+# Dprimes
+emmeans(m2, ~Veracity | Training * LieType) %>% 
+  contrast("revpairwise") %>% 
+  parameters()
+
+# Negative biases
+emmeans(m2, ~Training * LieType) %>% 
+  parameters()
+
+# e.g. differences in bias
+emmeans(m2, ~LieType | Training) %>% 
+  contrast("pairwise") %>% 
+  parameters()
+```
+
+As we see, we can query the posterior distribution for any desired quantity with uncertainty.
+
+## Alternative parameterization
+
+This is a bit hairy to code but we can also directly estimate the negative biases and dprimes for each group X condition:
+
+```{r}
+f2a <- bf(Answer ~ 0 + (Training / Veracity) %in% LieType + (0 + LieType / Veracity | Participant) + (1 | Stimulus))
+m2a <- brm(
+  f2a,  
+  family = bernoulli(link = probit),
+  data = d,
+  file = "models/m2a"
+)
+```
+
+```{r}
+parameters(m2a)
+```
+
+
+# Notes
+
+- The example might be clearer if the data i. had slightly more trials per person, and ii. had an overall positive sensitivity
+- Might want to stick with one parameterization throughout
+  - Downside is that the `%in%` and `/` formula operators are esoteric
+  - Upside is that we wouldn't have to talk (much) about the annoying deal with priors
