@@ -17,8 +17,8 @@ d <- d %>%
     Participant = fct_anon(factor(Participant)),
     Training = factor(
       Condition,
-      levels = c("ERT", "BT", "NT"),
-      labels = c("Emotion", "Bogus", "None")
+      levels = c("NT", "BT", "ERT"),
+      labels = c("None", "Bogus", "Emotion")
     ),
     Stimulus = factor(str_split_i(Stimuli, pattern = "_", 1)),
     LieType = factor(
@@ -32,18 +32,25 @@ d <- d %>%
   select(Participant, Training, Stimulus, LieType, Veracity, Answer)
 
 contrasts(d$Veracity) <- c(-0.5, 0.5)
-d$Training <- fct_relevel(d$Training, "None")
 
 fit <- brm(
   Answer ~ 1 + Veracity * Training * LieType + (1 + Veracity * LieType | Participant) + (1 | Stimulus),
-  family = bernoulli(link = probit_approx),
+  family = bernoulli(link = probit),
   init = "0",
   data = d,
   backend = "cmdstanr",
   threads = 2,
-  cores = 8
+  cores = 8,
+  save_pars = save_pars(all = TRUE),
+  control = list(adapt_delta = 0.95)
 )
-fit <- m2
 summary(fit)
-d$Answer <- posterior_predict(fit, ndraws = 1)[1,]
+
+# Hacky way to simulate good dataset from the posterior
+library(tidybayes)
+library(posterior)
+max_draw <- spread_draws(fit, lp__) %>%
+  filter(lp__ == max(lp__)) %>%
+  pull(.draw)
+d$Answer <- posterior_predict(fit, ndraws = 1, draw_ids = max_draw)[1,]
 write_rds(d, "data/dataset-synthetic.rds", compress = "gz")
