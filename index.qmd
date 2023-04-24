@@ -52,8 +52,6 @@ You can now load the required packages (click "Code" to show code here, and in c
 library(knitr)
 library(brms)
 library(emmeans)
-library(ggbeeswarm)
-library(ggstance)
 library(bayestestR)
 library(patchwork)
 library(scales)
