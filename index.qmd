@@ -62,7 +62,6 @@ library(tidybayes)
 library(ggdist)
 library(distributional)
 library(parameters)
-library(ggpp)
 library(tidyverse)
 ```
 
@@ -350,7 +349,7 @@ We can also visualize the participants' parameters. Note that there were very fe
 #| label: fig-sdt-person-parameters
 #| fig-width: 4
 #| fig-height: 4
-#| fig-cap: Scatterplot of participant-specific criterion and sensitivity parameters. Red point indicates the bivariate mean.
+#| fig-cap: Scatterplot of participant-specific criterion and sensitivity parameters.
 sdt %>% 
   ggplot(aes(crit, dprime)) +
   geom_hline(yintercept = 0, lty = 2, linewidth = .25) +
@@ -365,10 +364,6 @@ sdt %>%
   geom_point(
     shape = 1, 
     position = position_jitter(.01, .01)
-  ) +
-  stat_centroid(
-    .fun = mean, col = "red",
-    geom = "point", size = 2
   ) +
   theme(aspect.ratio = 1)
 ```
@@ -1007,10 +1002,6 @@ sdt %>%
   geom_point(
     shape = 1,
     position = position_jitter(.01, .01)
-  ) +
-  stat_centroid(
-    .fun = mean, col = "red",
-    geom = "point", size = 2
   ) +
   theme(aspect.ratio = 1)
 ```

@@ -1000,33 +1000,6 @@
       ],
       "Hash": "3a147ee02e85a8941aad9909f1b43b7b"
     },
-    "ggpp": {
-      "Package": "ggpp",
-      "Version": "0.5.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "MASS",
-        "R",
-        "dplyr",
-        "ggplot2",
-        "glue",
-        "grDevices",
-        "grid",
-        "gridExtra",
-        "lubridate",
-        "magrittr",
-        "polynom",
-        "rlang",
-        "scales",
-        "stats",
-        "stringr",
-        "tibble",
-        "xts",
-        "zoo"
-      ],
-      "Hash": "75306496d004439a99ca65a50d4f44be"
-    },
     "ggridges": {
       "Package": "ggridges",
       "Version": "0.5.4",
@@ -1780,17 +1753,6 @@
         "Rcpp"
       ],
       "Hash": "d744387aef9047b0b48be2933d78e862"
-    },
-    "polynom": {
-      "Package": "polynom",
-      "Version": "1.4-1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "graphics",
-        "stats"
-      ],
-      "Hash": "ceb5c2a59ba33d42d051285a3e8a5118"
     },
     "posterior": {
       "Package": "posterior",
