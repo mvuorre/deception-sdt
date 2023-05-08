@@ -794,6 +794,13 @@ bind_rows(
   )
 ```
 
+A "hypothesis test":
+
+```{r}
+hypothesis(m1, "Veracity1:TrainingBogus < 0")
+```
+
+
 ## Alternative parameterization
 
 As above, in the linear model parameterisation above, prior distributions on parameters might have unintended consequences. We therefore reparameterize the model to estimate means of the latent variable instead.
