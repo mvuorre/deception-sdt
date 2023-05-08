@@ -574,6 +574,33 @@ as_draws_df(m0a, variable = "b_", regex = TRUE) %>%
   parameters(centrality = "mean")
 ```
 
+## Alternative parameterisation 2
+
+We can also directly parameterise the model as dprime and criterion. However, this is slightly more complicated because it requires brms' nonlinear syntax.
+
+```{r}
+f0nl <- bf(
+  Answer ~ Phi(dprime * Veracity - criterion),
+  dprime ~ 1 + (1 |s| Participant), 
+  criterion ~ 1 + (1 |s| Participant) + (1 | Stimulus),
+  nl = TRUE
+)
+p0nl <- prior(normal(0, 1), nlpar = "dprime") +
+  prior(normal(0, 1), nlpar = "criterion") +
+  prior(normal(0, 1), nlpar = "dprime", class = "sd") +
+  prior(normal(0, 1), nlpar = "criterion", class = "sd")
+m0nl <- brm(
+  f0nl,  
+  family = bernoulli(link = "identity"),
+  data = d,
+  prior = p0nl,
+  file = "models/m0nl"
+)
+parameters(m0nl, centrality = "mean")
+tibble(m0nl$data)
+tibble(m0$data)
+```
+
 ## Person-specific estimates
 
 ```{r}
@@ -1006,27 +1033,6 @@ sdt %>%
   select(Participant, zfa, zhr, dprime, crit) %>% 
   pivot_longer(-Participant) %>% 
   summarise(t = parameters(t.test(value)), .by = name)
-```
-
-```{r}
-f0a4 <- bf(
-  Answer ~ Phi(dprime * Veracity - criterion),
-  dprime ~ 1 + (1 |s| Participant), 
-  criterion ~ 1 + (1 |s| Participant),
-  nl = TRUE
-)
-p0a4 <- prior(normal(0, 1), nlpar = "dprime") +
-  prior(normal(0, 1), nlpar = "criterion") +
-  prior(normal(0, 1), nlpar = "dprime", class = "sd") +
-  prior(normal(0, 1), nlpar = "criterion", class = "sd")
-m0a4 <- brm(
-  f0a4,  
-  family = bernoulli(link = "identity"),
-  data = d,
-  prior = p0a4,
-  file = "models/m0a4"
-)
-parameters(m0a3, centrality = "mean")
 ```
 
 ## Receiving Operator Characteristic
