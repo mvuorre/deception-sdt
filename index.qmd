@@ -597,8 +597,6 @@ m0nl <- brm(
   file = "models/m0nl"
 )
 parameters(m0nl, centrality = "mean")
-tibble(m0nl$data)
-tibble(m0$data)
 ```
 
 ## Person-specific estimates
