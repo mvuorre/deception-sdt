@@ -20,7 +20,6 @@ d <- d %>%
       levels = c("NT", "BT", "ERT"),
       labels = c("None", "Bogus", "Emotion")
     ),
-    Stimulus = factor(str_split_i(Stimuli, pattern = "_", 1)),
     LieType = factor(
       LieType,
       levels = c("AFF", "EXP"),
@@ -29,7 +28,7 @@ d <- d %>%
     Veracity = factor(Veracity, levels = 0:1, labels = c("False", "True")),
     Answer = Answer
   ) %>%
-  select(Participant, Training, Stimulus, LieType, Veracity, Answer)
+  select(Participant, Training, Stimulus = Stimuli, LieType, Veracity, Answer)
 
 contrasts(d$Veracity) <- c(-0.5, 0.5)
 
