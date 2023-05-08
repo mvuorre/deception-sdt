@@ -164,7 +164,7 @@ t.test(d_accuracy_participant$Accuracy, mu = 0.5) %>%
   parameters()
 ```
 
-However, this simple measure of accuracy can conflate any potential bias that participants might have (to e.g. prefer "true" over "false" responses) with their ability to tell True stimuli apart from False stimuli. Signal Detection Theory allows studying bias and ability to detect true/falsehoods separetely.
+However, this simple measure of accuracy can conflate any potential bias that participants might have (to e.g. prefer "true" over "Lie" responses) with their ability to tell True stimuli apart from False stimuli. Signal Detection Theory allows studying bias and ability to detect true/falsehoods separetely.
 
 # Signal Detection Theory
 
@@ -174,7 +174,7 @@ At the heart of Signal Detection Theory is the idea that following an observatio
 
 SDT models are applied (sometimes routinely) in a wide range of research areas. They are very popular in, for example, perception and memory research. Depending on the task at hand and concept under study, the mysterious quantity "latent evidence" is often labelled differently. For instance, in memory research it is often called "memory strength" or "familiarity".
 
-In the current application, we are interested in judgments of veracity, given some stimulus that is either truthful or not. In other words, participants are presented on each trial with a stimulus that is either False or True, and their task is to decide whether they thought the stimulus was false or true by responding with either "false" or "true". We might therefore, in this application, call this hypothesized latent quantity as, perhaps whimsically, truthiness.
+In the current application, we are interested in judgments of veracity, given some stimulus that is either truthful or not. In other words, participants are presented on each trial with a stimulus that is either False or True, and their task is to decide whether they thought the stimulus was a lie or true by responding with either "Lie" or "true". We might therefore, in this application, call this hypothesized latent quantity as, perhaps whimsically, truthiness.
 
 There are then hypothesized to be two truthiness distributions: One for False stimuli, and one for True stimuli. SDT allows us to examine the degree to which False and True stimuli lead to different truthiness distributions.
 
@@ -263,7 +263,7 @@ Although SDT-based analyses might then seem theory-laden, in fact this model is 
 
 ## Practice
 
-In practice, the parameters of this basic SDT model can be calculated from two proportions. To calculate those proportions, we first classify each trial into four different categories: Participants might correctly respond "true" to True ("hit") and "false" to False ("correct rejection") stimuli, and incorrectly respond "true" to False ("false alarm"), and "false" to True ("miss") stimuli. We now classify each trial in the example data to one of these four categories.
+In practice, the parameters of this basic SDT model can be calculated from two proportions. To calculate those proportions, we first classify each trial into four different categories: Participants might correctly respond "true" to True ("hit") and "Lie" to False ("correct rejection") stimuli, and incorrectly respond "true" to False ("false alarm"), and "Lie" to True ("miss") stimuli. We now classify each trial in the example data to one of these four categories.
 
 ```{r}
 #| label: tbl-classify-trials
@@ -657,6 +657,31 @@ bind_rows(
   )
 ```
 
+```{r}
+set.seed(1)
+spread_draws(m0, b_Intercept, b_Veracity1, r_Participant[Participant,Parameter] | Parameter) %>% 
+  mutate(
+    Criterion = -(Intercept + b_Intercept),
+    dprime = Veracity1 + b_Veracity1,
+    .keep = "unused"
+  ) %>% 
+  ungroup() %>% 
+  filter(Participant %in% sample(unique(.$Participant), 20)) %>% 
+  mutate(Participant = fct_reorder(factor(Participant), Criterion)) %>% 
+  pivot_longer(c(Criterion, dprime)) %>% 
+  ggplot(aes(value, Participant)) +
+  geom_vline(xintercept = 0, lty = 2, linewidth = .25) +
+  stat_halfeye(
+    slab_color = NA,
+    slab_fill = "grey80",
+    slab_linewidth = .2,
+    interval_size_range = c(.4, .8),
+    height = .75
+  ) +
+  labs(x = "Parameter value") +
+  facet_wrap("name")
+```
+
 
 # Model 1
 
@@ -685,7 +710,14 @@ m1 <- brm(
 )
 ```
 
-The default parameterization, and adding `Training` with dummy contrasts, leads to an intercept that is the negative criterion for `Training` = "None". Differences in negative criterion between this baseline and the other two groups are the two Training main effects. The main effect of `Veracity` indicates dprime for the baseline group, and the two interactions are differences in dprime between the baseline and the two other training groups. We display summaries of the estimates below, while negating the intercepts to criteria
+The default parameterization, and adding `Training` with dummy contrasts, leads to an intercept that is the negative criterion for `Training` = "None". Differences in negative criterion between this baseline and the other two groups are the two Training main effects. 
+
+```{r}
+contrasts(d$Training)
+```
+
+
+The main effect of `Veracity` indicates dprime for the baseline group, and the two interactions are differences in dprime between the baseline and the two other training groups. We display summaries of the estimates below, while negating the intercepts to criteria
 
 ```{r}
 #| code-fold: show
