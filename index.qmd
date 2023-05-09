@@ -599,7 +599,9 @@ m0nl <- brm(
 parameters(m0nl, centrality = "mean")
 ```
 
-## Person-specific estimates
+## Varying effects
+
+### Person-parameters' shrinkage
 
 ```{r}
 #| label: fig-sdt-person-shrinkage
@@ -657,9 +659,12 @@ bind_rows(
   )
 ```
 
+### All varying effects
+
 ```{r}
 set.seed(1)
-spread_draws(m0, b_Intercept, b_Veracity1, r_Participant[Participant,Parameter] | Parameter) %>% 
+p_m0_coef_participant <- m0 %>% 
+  spread_draws(b_Intercept, b_Veracity1, r_Participant[Participant,Parameter] | Parameter) %>% 
   mutate(
     Criterion = -(Intercept + b_Intercept),
     dprime = Veracity1 + b_Veracity1,
@@ -680,6 +685,42 @@ spread_draws(m0, b_Intercept, b_Veracity1, r_Participant[Participant,Parameter] 
   ) +
   labs(x = "Parameter value") +
   facet_wrap("name")
+```
+
+```{r}
+p_m0_coef_stimulus <- m0 %>% 
+  spread_draws(b_Intercept, r_Stimulus[Stimulus, Parameter] | Parameter) %>% 
+  mutate(
+    Criterion = -(Intercept + b_Intercept),
+    .keep = "unused"
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    Stimulus = fct_reorder(factor(Stimulus), Criterion),
+    name = "Criterion"
+  ) %>% 
+  ggplot(aes(Criterion, Stimulus)) +
+  geom_vline(xintercept = 0, lty = 2, linewidth = .25) +
+  stat_halfeye(
+    slab_color = NA,
+    slab_fill = "grey80",
+    slab_linewidth = .2,
+    interval_size_range = c(.4, .8),
+    height = .75
+  ) +
+  scale_x_continuous(
+    "Parameter value",
+    breaks = extended_breaks(7)
+  ) +
+  facet_wrap("name")
+```
+
+```{r}
+#| label: fig-sdt-m0-varying
+#| fig-width: 7
+#| fig-height: 4
+#| fig-cap: Caterpillar plots of participant- (left two panels) and stimulus-specific (right panel) parameters. We show participant-specific parameters for a random sample of 20 participants to reduce overplotting.
+p_m0_coef_participant | p_m0_coef_stimulus
 ```
 
 
@@ -961,48 +1002,75 @@ From these estimates, we can again use emmeans to produce other inferential quan
 ```{r}
 #| code-fold: show
 emm_m2_d1 <- emmeans(m2, ~Veracity | Training * LieType) %>% 
-  contrast("revpairwise") %>% 
-  parameters(centrality = "mean")
+  contrast("revpairwise")
 emm_m2_d2 <- emmeans(m2, ~Veracity + Training * LieType) %>% 
-  contrast(interaction = c("revpairwise", "pairwise"), by = "LieType") %>% 
-  parameters(centrality = "mean")
+  contrast(interaction = c("revpairwise", "pairwise"), by = "LieType")
 
 # Criteria
-emm_m2_c1 <- emmeans(m2, ~Training * LieType) %>% 
-  parameters(centrality = "mean")
+emm_m2_c1 <- emmeans(m2, ~Training * LieType)
 emm_m2_c2 <- emmeans(m2, ~Training | LieType) %>% 
-  contrast("pairwise") %>% 
-  parameters(centrality = "mean")
+  contrast("pairwise")
 ```
 
 ```{r}
 #| label: fig-m2-emmeans
-#| fig-cap: Posterior means and 95%CIs of the criterion and dprime parameters, or differences therein, from Model 2.
-# Dprimes
-list(emm_m2_c1, emm_m2_c2, emm_m2_d1, emm_m2_d2) %>% 
-  map(~tibble(.)) %>% 
-  bind_rows() %>% 
-  mutate(
-    p = if_else(str_detect(Parameter, "True - False"), "dprime", "Criterion"),
-    Parameter = str_remove(Parameter, "True - False, ")
-  ) %>% 
-  separate(Parameter, c("Training", "LieType"), sep = ", ") %>% 
+#| fig-cap: Posterior distributions and 95%CIs of the criterion and dprime parameters, or differences therein, from Model 2.
+tmp <- bind_rows(
+  bind_rows(
+    gather_emmeans_draws(emm_m2_d1) %>% 
+      group_by(Training, LieType) %>% 
+      select(-contrast),
+    gather_emmeans_draws(emm_m2_d2) %>% 
+      rename(
+        Training = Training_pairwise
+      ) %>% 
+      group_by(Training, LieType) %>% 
+      select(-Veracity_revpairwise)
+  ),
+  bind_rows(
+    gather_emmeans_draws(emm_m2_c1),
+    gather_emmeans_draws(emm_m2_c2) %>% 
+      rename(
+        Training = contrast
+      )
+  ),
+  .id = "Parameter"
+) %>% 
+  mutate(Parameter = factor(Parameter, labels = c("dprime", "Criterion"))) %>% 
   mutate(
     t = if_else(str_detect(Training, " - "), "Differences", "Group means") %>% 
       fct_inorder(),
     Training = fct_inorder(Training)
-  ) %>% 
-  ggplot(aes(Training, Mean, col = LieType)) +
+  ) 
+tmp %>%   
+  mutate(.value = if_else(Parameter == "Criterion", .value * -1, .value)) %>% 
+  mutate(Parameter = fct_rev(Parameter)) %>% 
+  ggplot(aes(Training, .value, slab_fill = LieType)) +
   labs(
     x = "Training group (or difference)",
-    y = "Posterior mean and 95%CI"
+    y = "Parameter value"
   ) +
   geom_hline(yintercept = 0, linewidth = .25) +
-  geom_pointrange(
-    aes(ymin = CI_low, ymax = CI_high),
-    position = position_dodge(width = .25)
-    ) +
-  facet_grid(p~t, scales = "free")
+  scale_x_continuous(
+    breaks = 1:6,
+    labels = unique(tmp$Training)
+  ) +
+  scale_slab_alpha_discrete(range = c(0.5, 1.0)) +
+  stat_halfeye(
+    normalize = "xy",
+    width = 0.33,
+    slab_color = "black",
+    slab_linewidth = 0.2,
+    interval_size_range = c(0.5, 0.75),
+    .width = 0.95,
+    aes(
+      side = ifelse(LieType=="Affective", "left", "right"),
+      x = ifelse(LieType == "Affective", as.numeric(Training)-0.025, as.numeric(Training)+0.025),
+      slab_alpha = after_stat(between(y, -0.1, 0.1))
+      )
+  ) +
+  guides(slab_alpha = "none") +
+  facet_grid(Parameter~t, scales = "free")
 ```
 
 ## Alternative parameterization
