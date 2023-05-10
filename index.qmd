@@ -1,5 +1,5 @@
 ---
-title: Analyzing Deception Data with Hierarchical Bayesian Signal Detection Theoretic Models (Computational notebook supplement to TBD)
+title: 'Computational notebook supplement to "A Tutorial for Deception Detection Analysis or: How I Learned to Stop Aggregating Veracity Judgements and Embraced Bayesian Mixed Effects Models"'
 author: 
   - name: Matti Vuorre
     orcid: 0000-0001-5052-066X
@@ -103,8 +103,8 @@ head(d)
 - `Training` is a between-subjects variable indicating which training group the participant was in,
 - `LieType` is a within-subjects variable; what type of lie was presented on the trial
 - `Stimulus` indicates which stimulus was presented
-- `Veracity` indicates the stimulus veracity (True or False)
-- `Answer` is the DV, as each answer participants give; truth=1, lie=0
+- `isLie` indicates whether the stimulus was a lie (Yes) or not (No)
+- `sayLie` is the participant's response ("not lie": 0 "lie": 1)
 
 ## Non-SDT analysis
 
@@ -118,7 +118,7 @@ First, we create a new variable encoding response accuracy.
 #| tbl-cap: First six rows of the example data with response accuracy.
 d <- d %>% 
   mutate(
-    Accuracy = as.integer(as.integer(Veracity) - 1 == Answer)
+    Accuracy = as.integer(as.integer(isLie) - 1 == sayLie)
   )
 head(d)
 ```
@@ -164,7 +164,7 @@ t.test(d_accuracy_participant$Accuracy, mu = 0.5) %>%
   parameters()
 ```
 
-However, this simple measure of accuracy can conflate any potential bias that participants might have (to e.g. prefer "true" over "Lie" responses) with their ability to tell True stimuli apart from False stimuli. Signal Detection Theory allows studying bias and ability to detect true/falsehoods separetely.
+However, this simple measure of accuracy can conflate any potential bias (to e.g. prefer "lie" over "not lie" responses) with their ability to discriminate between lies and true stimuli. Signal Detection Theory allows studying bias and sensitivity to lies separately.
 
 # Signal Detection Theory
 
@@ -174,17 +174,15 @@ At the heart of Signal Detection Theory is the idea that following an observatio
 
 SDT models are applied (sometimes routinely) in a wide range of research areas. They are very popular in, for example, perception and memory research. Depending on the task at hand and concept under study, the mysterious quantity "latent evidence" is often labelled differently. For instance, in memory research it is often called "memory strength" or "familiarity".
 
-In the current application, we are interested in judgments of veracity, given some stimulus that is either truthful or not. In other words, participants are presented on each trial with a stimulus that is either False or True, and their task is to decide whether they thought the stimulus was a lie or true by responding with either "Lie" or "true". We might therefore, in this application, call this hypothesized latent quantity as, perhaps whimsically, truthiness.
+In the current application, we are interested in participants' judgments of whether a just-seen stimulus is a lie or not. SDT assumes that the responses originate from a latent continuous quantity that is the participant's perceived falsehood of the stimulus. Here, we will refer to this subjective impression on each trial as the participant's "*internal evidence*" for the falsehood of the stimulus, or just *evidence* for convenience. Note that this evidence is a latent quantity that is never observed by the experimenter, but instead is the participant's internal response to the stimulus at hand. There are then hypothesized to be two evidence distributions: One for lie trials, and one for true trials. SDT allows us to examine the degree to which lies and true stimuli lead to different evidence distributions.
 
-There are then hypothesized to be two truthiness distributions: One for False stimuli, and one for True stimuli. SDT allows us to examine the degree to which False and True stimuli lead to different truthiness distributions.
+If participants are completely unable to detect any difference between lies and truths, these two distributions should be identical. Alternatively, if participants somehow *are* sensitive to the falsehood of the stimulus, lies and truths should lead to an internal evidence distribution for lies that has a greater average value than does the internal evidence distribution following true trials. 
 
-If participants are completely unable to detect any difference between False and True stimuli, these two distributions should be identical. Alternatively, if participants somehow *are* sensitive to the veracity of the stimulus, False and True stimuli should lead to an internal truthiness distribution for True trials that has a greater average value than does the internal truthiness distribution following False trials. 
-
-In addition, to make a decision the participant needs some criterion to which each truthiness signal is compared to. SDT allows us to examine where participants set this criterion. For example, it may be of interest whether participants show a liberal criterion, and are likely to respond "true" to just about anything.
+In addition, to make a decision the participant needs some criterion to which each evidence signal is compared to. SDT allows us to examine where participants set this criterion. For example, it may be of interest whether participants show a liberal criterion, and are likely to respond "lie" to just about anything.
 
 One of the great benefits of SDT is that it allows us to separate sensitivity and bias in examining task performance.
 
-We visualize the basic SDT framework for deception tasks in @fig-sdt-example. This figure shows two internal truthiness distributions with some made-up parameter values. In red is the distribution for False trials: Sometimes the realized truthiness value on that trial is low, sometimes high, but importantly there is some variation. In blue is the truthiness distribution for True trials: Sometimes the sampled value is high, sometimes low, but in this example it has a greater mean than the distribution for False trials. 
+We visualize the basic SDT framework for deception tasks in @fig-sdt-example. This figure shows two internal evidence distributions with some made-up parameter values. In red is the distribution for truths: Sometimes the realized evidence value on that trial is low, sometimes high, but importantly there is some variation. In blue is the evidence distribution for lies: Sometimes the value is high, sometimes low, but in this example it has a greater mean than the distribution for truths. 
 
 ```{r}
 #| label: fig-sdt-example
@@ -195,7 +193,7 @@ We visualize the basic SDT framework for deception tasks in @fig-sdt-example. Th
 sdt_draw <- function(d, crit) {
   tibble(
     d = c(0, d),
-    Veracity = factor(d, labels = c("False", "True"))
+    isLie = factor(d, labels = c("No", "Yes"))
   ) %>% 
     ggplot() +
     scale_y_continuous(
@@ -203,10 +201,10 @@ sdt_draw <- function(d, crit) {
       expand = expansion(c(0, 0.005))
     ) +
     scale_x_continuous(
-      "Truthiness"
+      "Evidence"
     ) +
     scale_color_brewer(
-      "Veracity",
+      "Lie stimulus",
       palette = "Set1",
       aesthetics = c("color")
     ) +
@@ -217,7 +215,7 @@ sdt_draw <- function(d, crit) {
     stat_slab(
       aes(
         xdist = dist_normal(d), 
-        color = Veracity,
+        color = isLie,
         fill = after_scale(alpha(color, .25))
       ),
       p_limits = c(0.0001, 0.9999)
@@ -259,11 +257,11 @@ sdt_draw <- function(d, crit) {
 sdt_draw(1, 0.3)
 ```
 
-Although SDT-based analyses might then seem theory-laden, in fact this model is statistically widely used for binary responses with some binary predictor value. 
+Although SDT-based analyses might then seem theory-laden, in fact this model is statistically widely used for binary responses with some binary predictor value.
 
 ## Practice
 
-In practice, the parameters of this basic SDT model can be calculated from two proportions. To calculate those proportions, we first classify each trial into four different categories: Participants might correctly respond "true" to True ("hit") and "Lie" to False ("correct rejection") stimuli, and incorrectly respond "true" to False ("false alarm"), and "Lie" to True ("miss") stimuli. We now classify each trial in the example data to one of these four categories.
+In practice, the parameters of this basic SDT model can be calculated from two proportions. To calculate those proportions, we first classify each trial into four different categories: **Hit**s are trials in which a lie is presented, and the participant correctly responds "lie". **Correct rejection**s are trials in which a truth is presented, and the participant correctly responds "not lie". **False alarm**s are trials in which a truth is presented, but the participant incorrectly responds "lie". **Miss**es are trials in which a lie is presented, but the participant incorrectly responds "not lie".
 
 ```{r}
 #| label: tbl-classify-trials
@@ -272,13 +270,22 @@ In practice, the parameters of this basic SDT model can be calculated from two p
 sdt <- d %>% 
   mutate(
     Type = case_when(
-      Veracity == "False" & Answer == 1 ~ "fa", # False alarm
-      Veracity == "False" & Answer == 0 ~ "cr", # Correct rejection
-      Veracity == "True" & Answer == 1 ~ "hit", # Hit
-      Veracity == "True" & Answer == 0 ~ "miss", # Miss
+      isLie == "No" & sayLie == 1 ~ "fa", # False alarm
+      isLie == "No" & sayLie == 0 ~ "cr", # Correct rejection
+      isLie == "Yes" & sayLie == 1 ~ "hit", # Hit
+      isLie == "Yes" & sayLie == 0 ~ "miss", # Miss
     )
   )
 head(sdt)
+```
+
+Below is a table illustrating all the classifications' counts in the example data.
+
+```{r}
+#| label: tbl-classify-trials2
+#| tbl-cap: Counts of SDT trial types.
+#| code-fold: show
+count(sdt, isLie, sayLie, Type, Accuracy)
 ```
 
 We leave it as an excercise to the reader to find each classification above in @fig-sdt-example.
@@ -296,7 +303,7 @@ sdt <- sdt %>%
 head(sdt)
 ```
 
-The **hit rate** is then the proportion of "hits" over the sum of "hits" and "misses". The **false alarm rate** is the proportion of "false alarms" over the sum of false alarms and correct rejections. Those rates are then "z-scored" to establish the latent continuum as a standard normal distribution. Sensitivity, often called *d-prime*, is then the distance between the distributions' means. The response criterion is calculated as (negative) half of the sum of the z-scores. In practice, we calculate all these in R as follows:
+The **hit rate** is then the proportion of "hits" over the sum of "hits" and "misses". The **false alarm rate** is the proportion of "false alarms" over the sum of false alarms and correct rejections. Those rates are then "z-scored" to establish the latent continuum as a standard normal distribution. Sensitivity, often called *d-prime*, is then the distance between the distributions' means. The response criterion is calculated as negative half of the sum of the z-scores. In practice, we calculate all these in R as follows:
 
 ```{r}
 #| code-fold: show
@@ -331,13 +338,13 @@ t.test(sdt$crit) %>%
   parameters()
 ```
 
-In these example data, sensitivity was not statistically significantly different from zero: On average, participants are unable to tell False from True stimuli, their *sensitivity to truthiness* was not significantly different from zero. On the other hand, the criterion was very low, indeed negative, so participants were generally liberal to answer "true". We can use the aggregate parameters to redraw @fig-sdt-example from above (@fig-sdt-example-2):
+In these example data, sensitivity was not statistically significantly different from zero: On average, participants are unable to tell lies from true stimuli. On the other hand, the criterion was high, so participants were generally conservative to answer "lie". We can use the aggregate parameters to redraw @fig-sdt-example from above (@fig-sdt-example-2):
 
 ```{r}
 #| label: fig-sdt-example-2
 #| fig-height: 3
 #| fig-width: 6
-#| fig-cap: "SDT model estimated from example data: The implied distributions of truthiness for False and True trials. As is seen, the distributions overlap completely and thus sensitivity is at zero. Criterion is below zero, so on average, 'True' responses are more likely; this is often called a liberal criterion."
+#| fig-cap: "SDT model estimated from example data: The implied evidence distributions for lie and truth trials. As is seen, the distributions overlap completely and thus sensitivity is at zero. Criterion is above zero, so on average, 'lie' responses are less likely; this is often called a conservative criterion (to respond with 'lie')."
 sdt_draw(mean(sdt$dprime), mean(sdt$crit))
 ```
 
@@ -416,26 +423,26 @@ Above, we used traditional methods and formulas for calculating SDT parameters f
 
 ## Coding of predictor variables
 
-We first need to ensure the categorical predictors are used appropriately in the model. We "contrast-code" `Veracity`. This ensures the model intercept is "between" False and True trials, or their average. It then corresponds to 1 - criterion.
+We first need to ensure the categorical predictors are used appropriately in the model. We "contrast-code" `isLie`. This ensures the model intercept is "between" truth and lie trials, or their average. The intercept will then correspond to *1 - criterion*.
 
 ```{r}
 #| code-fold: show
-contrasts(d$Veracity) <- c(-0.5, 0.5)
-contrasts(d$Veracity)
+contrasts(d$isLie) <- c(-0.5, 0.5)
+contrasts(d$isLie)
 ```
 
 ## Model specification
 
-We then define the GLMM as a mixed effects formula in R's extended formula syntax. Below, we regress `Answer` (0 = "False", 1 = "True") on an intercept (in R syntax `1` means an intercept because it adds a column of 1s in the design matrix) and the slope of `Veracity` (whether the stimulus was True or False). We also specify both as correlated random effects across `Participant`s, and the intercepts in addition as random across `Stimulus`
+We then define the GLMM as a mixed effects formula in R's extended formula syntax. Below, we regress `sayLie` (0 = "no", 1 = "yes") on an intercept (in R syntax `1` means an intercept because it adds a column of 1s in the design matrix) and the slope of `isLie` (whether the stimulus was a truth or a lie). We also specify both as correlated random effects across `Participant`s, and the intercepts in addition as random across `Stimulus`
 
 ```{r}
 #| code-fold: show
-f0 <- Answer ~ 1 + Veracity + 
-  (1 + Veracity | Participant) + 
+f0 <- sayLie ~ 1 + isLie + 
+  (1 + isLie | Participant) + 
   (1 | Stimulus)
 ```
 
-With this syntax, the model is parameterized such that there will be two main parameters. The intercept describes the (negative) criterion: It is half the sum of the z-scores of the hit and false alarm rates, or the z-score of the "true" responses for the "average" stimulus. The slope of `Veracity` indicates sensitivity--the separation of the latent variables between False and True trials. This parameter is typically called d-prime in many SDT applications.
+With this syntax, the model is parameterized such that there will be two main parameters. The intercept describes the (negative) criterion: It is half the sum of the z-scores of the hit and false alarm rates, or the z-score of the "lie" responses for the "average" stimulus. The slope of `isLie` indicates sensitivity--the separation of the latent variables between truth and lie trials. This parameter is typically called d-prime in many SDT applications.
 
 ### Prior distributions
 
@@ -482,8 +489,8 @@ Similarly, we want to see evidence that the model is able to reproduce the obser
 #| fig-cap: Posterior predictive check.
 #| fig-width: 8
 #| fig-height: 4
-pp_check(m0, type = "bars_grouped", group = "Veracity", ndraws = 100) + 
-  scale_x_continuous(breaks = c(0, 1), labels = c("False", "True"))
+pp_check(m0, type = "bars_grouped", group = "isLie", ndraws = 100) + 
+  scale_x_continuous(breaks = c(0, 1), labels = c("No", "Yes"))
 ```
 
 ## Model summary
@@ -497,7 +504,7 @@ summary(m0, prior = TRUE)
 
 We first return to the "Rhat" number from above. Above, each population level effect has an Rhat value of ~1.0 and we are reassured of model convergence. If this was not the case, we would first try drawing more samples from the model (see `?brm`).
 
-After confirming that the model estimation algorithm has converged, and that the model doesn't have glaring errors in reproducing the data, we can proceed to interpret the estimates. Instead of the above verbose output, we use `parameters()` to display a neat summary. The regression coefficients describe the criterion (-Intercept) and d-prime (slope):
+After confirming that the model estimation algorithm has converged, and that the model doesn't have glaring errors in reproducing the data, we can proceed to interpret the estimates. Instead of the above verbose output, we use `parameters()` to display a neat summary. The regression coefficients describe the negative criterion (Intercept) and d-prime (slope):
 
 ```{r}
 #| label: tbl-m0
@@ -505,18 +512,18 @@ After confirming that the model estimation algorithm has converged, and that the
 parameters(m0, centrality = "mean")
 ```
 
-The above numbers are the posterior means and 95%CIs. Those are calculated from the samples we drew from the posterior distribution using `brm()` above. Note that these summarise differ somewhat from the manually calculated basic SDT summaries above, because the model is different (random stimulus intercepts). Those samples can also be visualized:
+The above numbers are the posterior means and 95%CIs. Those are calculated from the samples we drew from the posterior distribution using `brm()` above. (Note that these summaries differ somewhat from the manually calculated basic SDT summaries above, because the model is different (random stimulus intercepts).) Those samples can also be visualized (note below we flip the intercept to plot the criterion directly):
 
 ```{r}
 #| label: fig-m0-3
 #| fig-width: 4
 #| fig-height: 3
 #| fig-cap: Estimated parameters' posterior distributions for Model 0.
-gather_draws(m0, b_Intercept, b_Veracity1) %>% 
+gather_draws(m0, b_Intercept, b_isLie1) %>% 
   mutate(
     .variable = factor(
       .variable, 
-      levels = c("b_Intercept", "b_Veracity1"), 
+      levels = c("b_Intercept", "b_isLie1"), 
       labels = c("Criterion", "dprime")
     )
   ) %>% 
@@ -544,14 +551,14 @@ gather_draws(m0, b_Intercept, b_Veracity1) %>%
 
 ## Alternative parameterisation 1
 
-The above parameterisation is the most straightforward and produces parameter estimates that directly reflect the (negative) criterion and d-prime. However, because the model is parameterized as a linear model with an intercept and a slope, the two `Veracity` conditions can end up having different priors even though that might not be intended. 
+The above parameterisation is the most straightforward and produces parameter estimates that directly reflect the (negative) criterion and d-prime. However, because the model is parameterized as a linear model with an intercept and a slope, the z-scored hit and false alarm rates can end up having different priors even though that might not be intended. 
 
-It is then often useful to reparameterize the model such that the population level parameters indicate means of the latent variable for each level of veracity. That is, instead of estimating an intercept and a slope, we directly estimate two means. This ensures using the same prior on the two veracity conditions' latent variable. Because we are treating `Veracity` as a factor in R, removing the intercepts with a `0` does the trick:
+It is then often useful to reparameterize the model such that the population level parameters indicate means of the latent variable for each level of `isLie`. That is, instead of estimating an intercept and a slope, we directly estimate z-scored false alarm and hit rates. This ensures using the same prior on the two veracity conditions' latent variable. Because we are treating `isLie` as a factor in R, removing the intercepts with a `0` does the trick:
 
 ```{r}
 #| code-fold: show
-f0a <- Answer ~ 0 + Veracity + 
-  (0 + Veracity | Participant) + 
+f0a <- sayLie ~ 0 + isLie + 
+  (0 + isLie | Participant) + 
   (1 | Stimulus)
 m0a <- brm(
   f0a,  
@@ -562,14 +569,14 @@ m0a <- brm(
 parameters(m0a, centrality = "mean")
 ```
 
-These parameters now reflect the model-predicted z-scores of the probabilities of answering "True" for False and True stimuli, respectively. We can convert them to SDT metrics as follows (note that we can here reverse the previous model's intercept to directly give the criterion)
+These parameters now reflect the model-predicted z-scores of the probabilities of answering "lie" for true and lie stimuli, respectively. We can convert them to SDT metrics as follows (note that we can here reverse the previous model's intercept to directly give the criterion)
 
 ```{r}
 #| code-fold: show
 as_draws_df(m0a, variable = "b_", regex = TRUE) %>% 
   mutate(
-    dprime = b_VeracityTrue - b_VeracityFalse,
-    criterion = -0.5 * (b_VeracityTrue + b_VeracityFalse)
+    dprime = b_isLieYes - b_isLieNo,
+    criterion = -0.5 * (b_isLieYes + b_isLieNo)
   ) %>% 
   parameters(centrality = "mean")
 ```
@@ -580,7 +587,7 @@ We can also directly parameterise the model as dprime and criterion. However, th
 
 ```{r}
 f0nl <- bf(
-  Answer ~ Phi(dprime * Veracity - criterion),
+  sayLie ~ Phi(dprime * isLie - criterion),
   dprime ~ 1 + (1 |s| Participant), 
   criterion ~ 1 + (1 |s| Participant) + (1 | Stimulus),
   nl = TRUE
@@ -625,24 +632,6 @@ bind_rows(
   geom_hline(yintercept = 0, lty = 2, linewidth = .25) +
   geom_vline(xintercept = 0, lty = 2, linewidth = .25) +
   labs(x = "Criterion", y = "dprime") +
-  # geom_segment(
-  #   aes(
-  #     y = Estimate_dprime - Est.Error_dprime, 
-  #     yend = Estimate_dprime + Est.Error_dprime, 
-  #     x = -Estimate_Criterion, 
-  #     xend = -Estimate_Criterion
-  #   ),
-  #   linewidth = .1
-  # ) +
-  # geom_segment(
-  #   aes(
-  #     x = -Estimate_Criterion - Est.Error_Criterion, 
-  #     xend = -Estimate_Criterion + Est.Error_Criterion, 
-  #     y = Estimate_dprime, 
-  #     yend = Estimate_dprime
-  #   ),
-  #   linewidth = .1
-  # ) +
   geom_segment(
     aes(
       x = crit, xend = -Estimate_Criterion,
@@ -650,7 +639,7 @@ bind_rows(
     ),
     linewidth = .25
   ) +
-  geom_point(shape = 21, fill = "white") +
+  geom_point(shape = 21, fill = "white", col = "grey30") +
   geom_point(
     aes(-Estimate_Criterion, Estimate_dprime)
   ) +
@@ -664,10 +653,10 @@ bind_rows(
 ```{r}
 set.seed(1)
 p_m0_coef_participant <- m0 %>% 
-  spread_draws(b_Intercept, b_Veracity1, r_Participant[Participant,Parameter] | Parameter) %>% 
+  spread_draws(b_Intercept, b_isLie1, r_Participant[Participant,Parameter] | Parameter) %>% 
   mutate(
     Criterion = -(Intercept + b_Intercept),
-    dprime = Veracity1 + b_Veracity1,
+    dprime = isLie1 + b_isLie1,
     .keep = "unused"
   ) %>% 
   ungroup() %>% 
@@ -723,7 +712,6 @@ p_m0_coef_stimulus <- m0 %>%
 p_m0_coef_participant | p_m0_coef_stimulus
 ```
 
-
 # Model 1
 
 We then proceed to a more complex model, and ask whether bias or sensitivity differ between the training groups. First, we ensure that "None" is the baseline level for `Training`.
@@ -736,12 +724,12 @@ d <- d %>%
   )
 ```
 
-Then, we can simply enter `Training` as a main effect and interaction with `Veracity`.
+Then, we can simply enter `Training` as a main effect and interaction with `isLie`.
 
 ```{r}
 #| code-fold: show
-f1 <- Answer ~ 1 + Veracity * Training + 
-  (1 + Veracity | Participant) + 
+f1 <- sayLie ~ 1 + isLie * Training + 
+  (1 + isLie | Participant) + 
   (1 | Stimulus)
 m1 <- brm(
   f1,  
@@ -757,15 +745,14 @@ The default parameterization, and adding `Training` with dummy contrasts, leads 
 contrasts(d$Training)
 ```
 
-
-The main effect of `Veracity` indicates dprime for the baseline group, and the two interactions are differences in dprime between the baseline and the two other training groups. We display summaries of the estimates below, while negating the intercepts to criteria
+The main effect of `isLie` indicates dprime for the baseline group, and the two interactions are differences in dprime between the baseline and the two other training groups. We display summaries of the estimates below, while negating the intercepts to criteria
 
 ```{r}
 #| code-fold: show
 gather_draws(m1, `b_.*`, regex = TRUE) %>%
   mutate(
     .value = if_else(
-      str_detect(.variable, "Veracity"), 
+      str_detect(.variable, "isLie"), 
       .value, 
       -.value
     )
@@ -788,11 +775,11 @@ emm_m1_c2 <- emmeans(m1, ~Training) %>%
   parameters(centrality = "mean")
 
 # Dprimes for three groups
-emm_m1_d1 <- emmeans(m1, ~Veracity + Training) %>% 
+emm_m1_d1 <- emmeans(m1, ~isLie + Training) %>% 
   contrast("revpairwise", by = "Training") %>% 
   parameters(centrality = "mean")
 # Differences between groups
-emm_m1_d2 <- emmeans(m1, ~Veracity + Training) %>% 
+emm_m1_d2 <- emmeans(m1, ~isLie + Training) %>% 
   contrast(interaction = c("revpairwise", "pairwise")) %>% 
   parameters(centrality = "mean")
 
@@ -800,28 +787,31 @@ reduce(list(emm_m1_c1, emm_m1_c2, emm_m1_d1, emm_m1_d2), bind_rows) %>%
   select(c(1:2, 4:5))
 ```
 
-Typically, we are more interested in visualizations than tables. We saved the quantities above in objects, which we visualize below:
+Typically, we are more interested in visualizations than tables. We saved the quantities above in objects, which we visualize below (note we flip the intercepts to directly plot criteria):
 
 ```{r}
 #| label: fig-m1-emmeans
 #| fig-cap: Posterior means and 95%CIs of the criterion and dprime parameters from Model 1.
-bind_rows(
+emm_m1 <- bind_rows(
   bind_rows(emm_m1_d1, emm_m1_d2) %>% 
   mutate(
-    Parameter = str_remove(Parameter, "True - False, ") %>% 
+    Parameter = str_remove(Parameter, "Yes - No, ") %>% 
       fct_inorder(),
     x = "dprime"
   ),
   bind_rows(emm_m1_c1, emm_m1_c2) %>% 
     mutate(
       Parameter = fct_inorder(Parameter),
-      x = "Negative criterion"
+      x = "Criterion"
     )
 ) %>% 
   mutate(
     t = if_else(str_detect(Parameter, " - "), "Differences", "Group means") %>% 
-      fct_inorder()
-  ) %>% 
+      fct_inorder(),
+    across(where(is.numeric), ~if_else(x == "Criterion", -1 * ., .))
+  )
+
+emm_m1 %>% 
   ggplot(aes(Parameter, Mean)) +
   labs(
     x = "Training group (or difference)",
@@ -830,7 +820,7 @@ bind_rows(
   geom_hline(yintercept = 0, linewidth = .2) +
   geom_pointrange(aes(ymin = CI_low, ymax = CI_high)) +
   facet_grid(
-    x~t,
+    x ~ t,
     scales = "free"
   )
 ```
@@ -838,7 +828,7 @@ bind_rows(
 A "hypothesis test":
 
 ```{r}
-hypothesis(m1, "Veracity1:TrainingBogus < 0")
+hypothesis(m1, "isLie1:TrainingBogus < 0")
 ```
 
 
@@ -848,8 +838,8 @@ As above, in the linear model parameterisation above, prior distributions on par
 
 ```{r}
 #| code-fold: show
-f1a <- Answer ~ 0 + Veracity %in% Training + 
-  (0 + Veracity | Participant) + 
+f1a <- sayLie ~ 0 + isLie %in% Training + 
+  (0 + isLie | Participant) + 
   (1 | Stimulus)
 m1a <- brm(
   f1a,  
@@ -868,33 +858,34 @@ Calculating the SDT parameters then takes some more work, however. We need to ma
 ```{r}
 #| code-fold: show
 x <- gather_draws(m1a, `b_.*`, regex = TRUE) %>% 
-  separate(.variable, c("Veracity", "Training"), sep = ":") %>% 
+  separate(.variable, c("isLie", "Training"), sep = ":") %>% 
   mutate(
-    Veracity = str_remove(Veracity, "b_Veracity"),
+    isLie = str_remove(isLie, "b_isLie"),
     Training = str_remove(Training, "Training")
   ) %>% 
-  pivot_wider(names_from = Veracity, values_from = .value) %>% 
+  pivot_wider(names_from = isLie, values_from = .value) %>% 
   mutate(
-    Criterion = -0.5 * (True + False),
-    dprime = True - False
+    Criterion = -0.5 * (Yes + No),
+    dprime = Yes - No
   ) %>% 
-  select(-False, -True) %>% 
+  select(-No, -Yes) %>% 
   pivot_longer(Criterion:dprime)
 x2 <- x %>% 
   group_by(name) %>%
-  compare_levels(value, Training)
+  compare_levels(value, Training, comparison = emmeans_comparison("pairwise"))
+tmp <- bind_rows(x, x2) %>% 
+  mutate(
+    t = if_else(str_detect(Training, "-"), "Differences", "Group means") %>% 
+      fct_inorder(),
+    Training = factor(Training, levels = levels(emm_m1$Parameter))
+  )
 ```
 
 
 ```{r}
 #| label: fig-m1-posteriors
 #| fig-cap: Posterior distributions with 66% (thick) and 95%CIs (thin lines) of the criterion and dprime parameters from Model 1.
-bind_rows(x, x2) %>% 
-  mutate(
-    t = if_else(str_detect(Training, "-"), "Difference", "Mean") %>% 
-      fct_inorder(),
-    Training = fct_inorder(Training)
-  ) %>% 
+tmp %>% 
   ggplot(aes(Training, value)) +
   labs(
     x = "Training group (or difference)",
@@ -920,12 +911,7 @@ Because our estimates are random samples from the posterior distribution, it is 
 
 ```{r}
 #| code-fold: show
-rope <- bind_rows(x, x2) %>% 
-  mutate(
-    t = if_else(str_detect(Training, "-"), "Difference", "Mean") %>% 
-      fct_inorder(),
-    Training = fct_inorder(Training)
-  ) %>% 
+rope <- tmp %>% 
   group_by(Training, name, t) %>% 
   group_modify(
     ~describe_posterior(
@@ -941,12 +927,7 @@ rope <- bind_rows(x, x2) %>%
 ```{r}
 #| label: fig-m1-rope
 #| fig-cap: Posterior distributions with 66% (thick) and 95%CIs (thin lines) of the criterion and dprime parameters from Model 1. The densities are colored according to whether the value lies within (dark) or outside the ROPE from -0.1 to 0.1. Proportions of the posterior distribution within the ROPE are displayed in numbers.
-bind_rows(x, x2) %>% 
-  mutate(
-    t = if_else(str_detect(Training, "-"), "Difference", "Mean") %>% 
-      fct_inorder(),
-    Training = fct_inorder(Training)
-  ) %>% 
+tmp %>% 
   ggplot(aes(Training, value)) +
   labs(
     x = "Training group (or difference)",
@@ -982,8 +963,8 @@ Finally, we include the within-person manipulation LieType as well.
 
 ```{r}
 #| code-fold: show
-f2 <- Answer ~ 1 + Veracity * Training * LieType + 
-  (1 + Veracity * LieType | Participant) + 
+f2 <- sayLie ~ 1 + isLie * Training * LieType + 
+  (1 + isLie * LieType | Participant) + 
   (1 | Stimulus)
 m2 <- brm(
   f2,  
@@ -1001,9 +982,9 @@ From these estimates, we can again use emmeans to produce other inferential quan
 
 ```{r}
 #| code-fold: show
-emm_m2_d1 <- emmeans(m2, ~Veracity | Training * LieType) %>% 
+emm_m2_d1 <- emmeans(m2, ~isLie | Training * LieType) %>% 
   contrast("revpairwise")
-emm_m2_d2 <- emmeans(m2, ~Veracity + Training * LieType) %>% 
+emm_m2_d2 <- emmeans(m2, ~isLie + Training * LieType) %>% 
   contrast(interaction = c("revpairwise", "pairwise"), by = "LieType")
 
 # Criteria
@@ -1025,7 +1006,7 @@ tmp <- bind_rows(
         Training = Training_pairwise
       ) %>% 
       group_by(Training, LieType) %>% 
-      select(-Veracity_revpairwise)
+      select(-isLie_revpairwise)
   ),
   bind_rows(
     gather_emmeans_draws(emm_m2_c1),
@@ -1077,8 +1058,8 @@ tmp %>%
 
 ```{r}
 #| code-fold: show
-f2a <- Answer ~ 0 + (Training / Veracity) %in% LieType + 
-  (0 + LieType / Veracity | Participant) + 
+f2a <- sayLie ~ 0 + (Training / isLie) %in% LieType + 
+  (0 + LieType / isLie | Participant) + 
   (1 | Stimulus)
 m2a <- brm(
   f2a,  
@@ -1113,14 +1094,14 @@ This is just to show that the estimated values reflect manually calculated close
 
 ```{r}
 #| output: hide
-f0a2 <- Answer ~ 1 + Veracity + (1 + Veracity | Participant)
+f0a2 <- sayLie ~ 1 + isLie + (1 + isLie | Participant)
 m0a2 <- brm(
   formula = f0a2,  
   family = bernoulli(link = probit),
   data = d,
   file = "models/m0a2"
 )
-f0a3 <- Answer ~ 0 + Veracity + (0 + Veracity | Participant)
+f0a3 <- sayLie ~ 0 + isLie + (0 + isLie | Participant)
 m0a3 <- brm(
   formula = f0a3,  
   family = bernoulli(link = probit),
@@ -1130,8 +1111,8 @@ m0a3 <- brm(
 parameters(m0a2, centrality = "mean")
 as_draws_df(m0a3, variable = "b_", regex = TRUE) %>% 
   mutate(
-    dprime = b_VeracityTrue - b_VeracityFalse,
-    crit = -0.5 * (b_VeracityTrue + b_VeracityFalse)
+    dprime = b_isLieYes - b_isLieNo,
+    crit = -0.5 * (b_isLieYes + b_isLieNo)
   ) %>% 
   parameters(centrality = "mean")
 sdt %>% 
@@ -1160,12 +1141,6 @@ sdt %>%
     limits = c(0, 1),
     expand = expansion(0.01)
   ) +
-  geom_smooth(
-    method = "lm",
-    linewidth = .33,
-    color = "black",
-    alpha = .2
-  ) +
   geom_point(
     shape = 1,
     position = position_jitter(.01, .01)
@@ -1187,7 +1162,7 @@ rocs <- as_draws_df(m0a) %>%
   select(starts_with("b_")) %>% 
   rownames_to_column("i") %>% 
   crossing(grid) %>% 
-  mutate(hr = pnorm(x, b_VeracityTrue - b_VeracityFalse, lower = FALSE))
+  mutate(hr = pnorm(x, b_isLieYes - b_isLieNo, lower = FALSE))
 ```
 
 ```{r}
