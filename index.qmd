@@ -44,7 +44,7 @@ First, ensure that your current working directory contains both the analysis scr
 
 Then, make sure that you have the required R packages installed. We use [renv](https://rstudio.github.io/renv/articles/collaborating.html) to ensure that you can install and use the exact same versions of the packages. To install those packages, execute `renv::restore()` in the R console (you only need to do this once).
 
-You can now load the required packages (click "Code" to show code here, and in code blocks in the rest of the document).
+You can now load the required packages (click "Code" to show code here, and in code blocks in the rest of the document). (Note that the MCMC program Stan may have some problems on Windows computers; see [here](https://github.com/stan-dev/rstan/wiki/Configuring-C---Toolchain-for-Windows) for more information.)
 
 ```{r}
 #| message: false
@@ -198,7 +198,7 @@ sdt_draw <- function(d, crit) {
     ggplot() +
     scale_y_continuous(
       "Density",
-      expand = expansion(c(0, 0.005))
+      expand = expansion(c(0, 0.025))
     ) +
     scale_x_continuous(
       "Evidence"
@@ -247,7 +247,7 @@ sdt_draw <- function(d, crit) {
     annotate(
       geom = "text",
       x = 3.3, y = 0.87,
-      label = "Sensitivity"
+      label = "Discriminability"
     ) +
     theme(
       axis.text.y = element_blank(),
@@ -542,6 +542,7 @@ gather_draws(m0, b_Intercept, b_isLie1) %>%
   stat_halfeye(
     adjust = 1.5,
     slab_color = "black",
+    slab_fill = "lightskyblue2",
     slab_linewidth = 0.25,
     slab_fill = "grey80",
     normalize = "xy",
@@ -667,7 +668,7 @@ p_m0_coef_participant <- m0 %>%
   geom_vline(xintercept = 0, lty = 2, linewidth = .25) +
   stat_halfeye(
     slab_color = NA,
-    slab_fill = "grey80",
+    slab_fill = "darkorange",
     slab_linewidth = .2,
     interval_size_range = c(.4, .8),
     height = .75
@@ -692,7 +693,7 @@ p_m0_coef_stimulus <- m0 %>%
   geom_vline(xintercept = 0, lty = 2, linewidth = .25) +
   stat_halfeye(
     slab_color = NA,
-    slab_fill = "grey80",
+    slab_fill = "indianred1",
     slab_linewidth = .2,
     interval_size_range = c(.4, .8),
     height = .75
@@ -766,10 +767,11 @@ We can then use functions in the emmeans package to calculate other quantities, 
 #| code-fold: show
 #| label: tbl-m1-emmeans
 #| tbl-cap: Criteria conditional means and group differences (first six rows), and groups' dprimes and differences therein (last six rows).
-# Criteria
+
+# (Negative) criteria
 emm_m1_c1 <- emmeans(m1, ~Training) %>% 
   parameters(centrality = "mean")
-# Differences in criteria
+# Differences in (negative) criteria
 emm_m1_c2 <- emmeans(m1, ~Training) %>% 
   contrast("pairwise") %>% 
   parameters(centrality = "mean")
@@ -828,7 +830,7 @@ emm_m1 %>%
 A "hypothesis test":
 
 ```{r}
-hypothesis(m1, "isLie1:TrainingBogus < 0")
+hypothesis(m1, "TrainingEmotion < 0")
 ```
 
 
@@ -987,7 +989,7 @@ emm_m2_d1 <- emmeans(m2, ~isLie | Training * LieType) %>%
 emm_m2_d2 <- emmeans(m2, ~isLie + Training * LieType) %>% 
   contrast(interaction = c("revpairwise", "pairwise"), by = "LieType")
 
-# Criteria
+# (Negative) criteria
 emm_m2_c1 <- emmeans(m2, ~Training * LieType)
 emm_m2_c2 <- emmeans(m2, ~Training | LieType) %>% 
   contrast("pairwise")
