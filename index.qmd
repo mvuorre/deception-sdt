@@ -9,8 +9,12 @@ author:
     orcid:  0000-0002-2753-637X
     affiliation: Kingston University London
 site-url: https://github.com/mvuorre/deception-sdt
-citation: true
-date: 2023-04-21
+citation:
+  type: article-journal
+  container-title: "PsyArXiv"
+  doi: "10.31234/osf.io/fdh5b"
+  url: https://psyarxiv.com/fdh5b/
+date: 2023-05-16
 execute:
   cache: true
   warning: false
@@ -36,11 +40,11 @@ bibliography: bibliography.bib
 
 # Preface
 
-This document is a computational notebook supplement to TBD (Zloteanu & Vuorre, TBD). We introduce Signal Detection Theory (SDT) and show how to apply it in practice in the area of deception research. Moreover, we implement SDT models as Generalized Linear Mixed Models (GLMM) in a bayesian inferential framework in R. This document is a [Quarto](https://quarto.org/) computational notebook. You can download the source code at TBD and reproduce the analyses in [RStudio](https://posit.co/downloads/).
+This document is a computational notebook supplement to "A Tutorial for Deception Detection Analysis or: How I Learned to Stop Aggregating Veracity Judgements and Embraced Bayesian Mixed Effects Models" ([Zloteanu & Vuorre, 2023](https://psyarxiv.com/fdh5b/)). We introduce Signal Detection Theory (SDT) and show how to apply it in practice in the area of deception research. Moreover, we implement SDT models as Generalized Linear Mixed Models (GLMM) in a bayesian inferential framework in R. This document is a [Quarto](https://quarto.org/) computational notebook. You can download the source code from [GitHub](https://github.com/mvuorre/deception-sdt) or [OSF](https://osf.io/kuhzj/) and reproduce the analyses in [RStudio](https://posit.co/downloads/).
 
 # R environment
 
-First, ensure that your current working directory contains both the analysis script and the data file. It is best to download the whole project directory from TBD. If you use RStudio, open up the relevant R Project (`deception-sdt.Rproj`) in RStudio.
+First, ensure that your current working directory contains both the analysis script and the data file. It is best to download the whole project directory so that you have the dependencies. If you use RStudio, open up the relevant R Project (`deception-sdt.Rproj`) in RStudio.
 
 Then, make sure that you have the required R packages installed. We use [renv](https://rstudio.github.io/renv/articles/collaborating.html) to ensure that you can install and use the exact same versions of the packages. To install those packages, execute `renv::restore()` in the R console (you only need to do this once).
 
@@ -90,7 +94,7 @@ dir.create("models", FALSE)
 
 ## Data
 
-For this tutorial, we use a **synthetic copy** of data discussed in XYZ. Note that all categorical predictors are R factors, and the outcome is an integer or float (0s and 1s).
+For this tutorial, we use a **synthetic copy** of previously published data. Note that all categorical predictors are R factors, and the outcome is an integer or float (0s and 1s).
 
 ```{r}
 #| code-fold: show
@@ -1075,10 +1079,6 @@ m2a <- brm(
 parameters(m2a)
 ```
 
-# Conclusion
-
-TBD
-
 # Further reading
 
 The GLMM analysis of SDT models in R is based on @vuorre2017, which in turn drew on discussions in @rouder_introduction_2005, @rouder_signal_2007, @decarlo_signal_1998, @decarlo_statistical_2010, and @decarlo_using_2003. @macmillan_detection_2005 is a classic introductory text on SDT, and @stanislaw_calculation_1999 discusses the calculations required for SDT metrics in some detail. @burkner_brms:_2017 is a good introductory text on the brms package; @wickham_r_2016 is an excellent book on R; and @mcelreath_statistical_2016 is a recommended introductory textbook on bayesian statistics and probabilistic modelling.
@@ -1120,7 +1120,12 @@ as_draws_df(m0a3, variable = "b_", regex = TRUE) %>%
 sdt %>% 
   select(Participant, zfa, zhr, dprime, crit) %>% 
   pivot_longer(-Participant) %>% 
-  summarise(t = parameters(t.test(value)), .by = name)
+  group_by(name) %>% 
+  group_modify(
+    ~parameters(t.test(.$value)) %>% 
+      select(Mean, CI_low, CI_high, p),
+    .keep = TRUE
+  )
 ```
 
 ## Receiving Operator Characteristic
