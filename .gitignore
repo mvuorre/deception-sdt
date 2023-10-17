@@ -5,3 +5,6 @@
 data-raw/
 models/
 *_cache/
+*.docx
+
+/.quarto/
