@@ -1,5 +1,7 @@
 ---
-title: 'Computational notebook supplement to "A Tutorial for Deception Detection Analysis or: How I Learned to Stop Aggregating Veracity Judgements and Embraced Bayesian Mixed Effects Models"'
+title: A tutorial for deception detection analysis
+subtitle: |
+  Computational notebook
 author: 
   - name: Matti Vuorre
     orcid: 0000-0001-5052-066X
@@ -26,7 +28,7 @@ format:
     mainfont: "Fira sans"
     monofont: "Fira code"
     code-fold: true
-    code-link: true # Slow!
+    # code-link: true # Slow!
     toc: true
     toc-depth: 3
     toc-expand: 2
@@ -40,7 +42,7 @@ bibliography: bibliography.bib
 
 # Preface
 
-This document is a computational notebook supplement to "A Tutorial for Deception Detection Analysis or: How I Learned to Stop Aggregating Veracity Judgements and Embraced Bayesian Mixed Effects Models" ([Zloteanu & Vuorre, 2023](https://psyarxiv.com/fdh5b/)). We introduce Signal Detection Theory (SDT) and show how to apply it in practice in the area of deception research. Moreover, we implement SDT models as Generalized Linear Mixed Models (GLMM) in a bayesian inferential framework in R. This document is a [Quarto](https://quarto.org/) computational notebook. You can download the source code from [GitHub](https://github.com/mvuorre/deception-sdt) or [OSF](https://osf.io/kuhzj/) and reproduce the analyses in [RStudio](https://posit.co/downloads/).
+This document is a computational notebook supplement to "A Tutorial for Deception Detection Analysis or: How I Learned to Stop Aggregating Veracity Judgements and Embraced Bayesian Mixed Effects Models" ([Zloteanu & Vuorre, 2023](https://psyarxiv.com/fdh5b/)). We introduce Signal Detection Theory (SDT) and show how to apply it in practice in the area of deception research. Moreover, we implement SDT models as Generalized Linear Mixed Models (GLMM) in a bayesian inferential framework in R. This document is a [Quarto](https://quarto.org/) computational notebook. You can download the source code from [GitHub](https://github.com/mvuorre/deception-sdt) or [Zenodo](https://zenodo.org/doi/10.5281/zenodo.10200119) and reproduce the analyses in [RStudio](https://posit.co/downloads/).
 
 # R environment
 
@@ -53,6 +55,7 @@ You can now load the required packages (click "Code" to show code here, and in c
 ```{r}
 #| message: false
 #| cache: false
+
 library(knitr)
 library(brms)
 library(emmeans)
@@ -72,6 +75,7 @@ We then set some options for the document output.
 ```{r}
 #| message: false
 #| cache: false
+
 theme_set(
   theme_linedraw() +
     theme(panel.grid = element_blank())
@@ -84,6 +88,7 @@ Next we set options for the bayesian model estimation procedures. We use as many
 
 ```{r}
 #| message: false
+
 options(
   mc.cores = parallel::detectCores(logical = FALSE)
 )
@@ -100,6 +105,7 @@ For this tutorial, we use a **synthetic copy** of previously published data. Not
 #| code-fold: show
 #| label: tbl-data
 #| tbl-cap: First six rows of the example data.
+
 d <- read_rds("data/dataset-synthetic.rds")
 head(d)
 ```
@@ -120,6 +126,7 @@ First, we create a new variable encoding response accuracy.
 #| code-fold: show
 #| label: tbl-data-accuracy
 #| tbl-cap: First six rows of the example data with response accuracy.
+
 d <- d %>% 
   mutate(
     Accuracy = as.integer(as.integer(isLie) - 1 == sayLie)
@@ -131,8 +138,12 @@ We then summarize the data to proportion correct for each person.
 
 ```{r}
 #| code-fold: show
+
 d_accuracy_participant <- d %>% 
-  summarise(Accuracy = mean(Accuracy), .by = Participant)
+  summarise(
+    Accuracy = mean(Accuracy), 
+    .by = Participant
+  )
 ```
 
 We can then display these proportions correct as a simple histogram.
@@ -142,6 +153,7 @@ We can then display these proportions correct as a simple histogram.
 #| fig-width: 4
 #| fig-height: 3
 #| fig-cap: Histogram of proportions correct.
+
 d_accuracy_participant %>%
   ggplot(aes(Accuracy)) +
   scale_x_continuous(
@@ -379,12 +391,12 @@ sdt %>%
 
 ### Relation with accuracy
 
-Typically, although conceptually different and on different scales, proportion corrects are typically very similar to d-primes. 
+Proportion corrects are sometimes very similar to d-primes (@fig-sdt-person-accuracy), but this does not hold in general [@macmillan_detection_2005, Chapter 1].
 
 ```{r}
 #| label: fig-sdt-person-accuracy
 #| fig-width: 8
-#| fig-height: 4
+#| fig-height: 3
 #| fig-cap: Scatterplot of participant-specific sensitivity and accuracy (proportion correct) parameters.
 pa <- left_join(
   sdt,
@@ -513,6 +525,7 @@ After confirming that the model estimation algorithm has converged, and that the
 ```{r}
 #| label: tbl-m0
 #| tbl-cap: Summary of the baseline model's main parameters.
+
 parameters(m0, centrality = "mean")
 ```
 
@@ -521,8 +534,9 @@ The above numbers are the posterior means and 95%CIs. Those are calculated from 
 ```{r}
 #| label: fig-m0-3
 #| fig-width: 4
-#| fig-height: 3
+#| fig-height: 2
 #| fig-cap: Estimated parameters' posterior distributions for Model 0.
+
 gather_draws(m0, b_Intercept, b_isLie1) %>% 
   mutate(
     .variable = factor(
@@ -548,7 +562,6 @@ gather_draws(m0, b_Intercept, b_isLie1) %>%
     slab_color = "black",
     slab_fill = "lightskyblue2",
     slab_linewidth = 0.25,
-    slab_fill = "grey80",
     normalize = "xy",
     height = 0.75
   )
@@ -658,7 +671,10 @@ bind_rows(
 ```{r}
 set.seed(1)
 p_m0_coef_participant <- m0 %>% 
-  spread_draws(b_Intercept, b_isLie1, r_Participant[Participant,Parameter] | Parameter) %>% 
+  spread_draws(
+    b_Intercept, b_isLie1, 
+    r_Participant[Participant,Parameter] | Parameter
+  ) %>% 
   mutate(
     Criterion = -(Intercept + b_Intercept),
     dprime = isLie1 + b_isLie1,
@@ -683,7 +699,9 @@ p_m0_coef_participant <- m0 %>%
 
 ```{r}
 p_m0_coef_stimulus <- m0 %>% 
-  spread_draws(b_Intercept, r_Stimulus[Stimulus, Parameter] | Parameter) %>% 
+  spread_draws(
+    b_Intercept, r_Stimulus[Stimulus, Parameter] | Parameter
+  ) %>% 
   mutate(
     Criterion = -(Intercept + b_Intercept),
     .keep = "unused"
@@ -714,7 +732,12 @@ p_m0_coef_stimulus <- m0 %>%
 #| fig-width: 7
 #| fig-height: 4
 #| fig-cap: Caterpillar plots of participant- (left two panels) and stimulus-specific (right panel) parameters. We show participant-specific parameters for a random sample of 20 participants to reduce overplotting.
-p_m0_coef_participant | p_m0_coef_stimulus
+
+(p_m0_coef_participant | p_m0_coef_stimulus) &
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
 ```
 
 # Model 1
