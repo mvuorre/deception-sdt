@@ -800,7 +800,7 @@ emm_m1_c1 <- emmeans(m1, ~Training) %>%
   parameters(centrality = "mean")
 # Differences in (negative) criteria
 emm_m1_c2 <- emmeans(m1, ~Training) %>% 
-  contrast("pairwise") %>% 
+  contrast("revpairwise") %>% 
   parameters(centrality = "mean")
 
 # Dprimes for three groups
@@ -809,7 +809,7 @@ emm_m1_d1 <- emmeans(m1, ~isLie + Training) %>%
   parameters(centrality = "mean")
 # Differences between groups
 emm_m1_d2 <- emmeans(m1, ~isLie + Training) %>% 
-  contrast(interaction = c("revpairwise", "pairwise")) %>% 
+  contrast(interaction = c("revpairwise", "revpairwise")) %>% 
   parameters(centrality = "mean")
 
 reduce(list(emm_m1_c1, emm_m1_c2, emm_m1_d1, emm_m1_d2), bind_rows) %>% 
@@ -821,10 +821,11 @@ Typically, we are more interested in visualizations than tables. We saved the qu
 ```{r}
 #| label: fig-m1-emmeans
 #| fig-cap: Posterior means and 95%CIs of the criterion and dprime parameters from Model 1.
+
 emm_m1 <- bind_rows(
   bind_rows(emm_m1_d1, emm_m1_d2) %>% 
   mutate(
-    Parameter = str_remove(Parameter, "Yes - No, ") %>% 
+    Parameter = str_remove(Parameter, "Yes - No ") %>% 
       fct_inorder(),
     x = "dprime"
   ),
@@ -835,7 +836,9 @@ emm_m1 <- bind_rows(
     )
 ) %>% 
   mutate(
-    t = if_else(str_detect(Parameter, " - "), "Differences", "Group means") %>% 
+    t = if_else(
+      str_detect(Parameter, " - "), "Differences", "Group means"
+    ) %>% 
       fct_inorder(),
     across(where(is.numeric), ~if_else(x == "Criterion", -1 * ., .))
   )
@@ -901,7 +904,11 @@ x <- gather_draws(m1a, `b_.*`, regex = TRUE) %>%
   pivot_longer(Criterion:dprime)
 x2 <- x %>% 
   group_by(name) %>%
-  compare_levels(value, Training, comparison = emmeans_comparison("pairwise"))
+  compare_levels(
+    value, 
+    Training, 
+    comparison = emmeans_comparison("revpairwise")
+  )
 tmp <- bind_rows(x, x2) %>% 
   mutate(
     t = if_else(str_detect(Training, "-"), "Differences", "Group means") %>% 
@@ -914,6 +921,7 @@ tmp <- bind_rows(x, x2) %>%
 ```{r}
 #| label: fig-m1-posteriors
 #| fig-cap: Posterior distributions with 66% (thick) and 95%CIs (thin lines) of the criterion and dprime parameters from Model 1.
+
 tmp %>% 
   ggplot(aes(Training, value)) +
   labs(
@@ -940,6 +948,7 @@ Because our estimates are random samples from the posterior distribution, it is 
 
 ```{r}
 #| code-fold: show
+
 rope <- tmp %>% 
   group_by(Training, name, t) %>% 
   group_modify(
@@ -956,6 +965,7 @@ rope <- tmp %>%
 ```{r}
 #| label: fig-m1-rope
 #| fig-cap: Posterior distributions with 66% (thick) and 95%CIs (thin lines) of the criterion and dprime parameters from Model 1. The densities are colored according to whether the value lies within (dark) or outside the ROPE from -0.1 to 0.1. Proportions of the posterior distribution within the ROPE are displayed in numbers.
+
 tmp %>% 
   ggplot(aes(Training, value)) +
   labs(
@@ -983,7 +993,8 @@ tmp %>%
   facet_grid(
     name~t, 
     scales = "free"
-  )
+  ) +
+  theme(legend.position = "none")
 ```
 
 # Model 2
@@ -1011,20 +1022,22 @@ From these estimates, we can again use emmeans to produce other inferential quan
 
 ```{r}
 #| code-fold: show
+
 emm_m2_d1 <- emmeans(m2, ~isLie | Training * LieType) %>% 
   contrast("revpairwise")
 emm_m2_d2 <- emmeans(m2, ~isLie + Training * LieType) %>% 
-  contrast(interaction = c("revpairwise", "pairwise"), by = "LieType")
+  contrast(interaction = c("revpairwise", "revpairwise"), by = "LieType")
 
 # (Negative) criteria
 emm_m2_c1 <- emmeans(m2, ~Training * LieType)
 emm_m2_c2 <- emmeans(m2, ~Training | LieType) %>% 
-  contrast("pairwise")
+  contrast("revpairwise")
 ```
 
 ```{r}
 #| label: fig-m2-emmeans
 #| fig-cap: Posterior distributions and 95%CIs of the criterion and dprime parameters, or differences therein, from Model 2.
+
 tmp <- bind_rows(
   bind_rows(
     gather_emmeans_draws(emm_m2_d1) %>% 
@@ -1032,7 +1045,7 @@ tmp <- bind_rows(
       select(-contrast),
     gather_emmeans_draws(emm_m2_d2) %>% 
       rename(
-        Training = Training_pairwise
+        Training = Training_revpairwise
       ) %>% 
       group_by(Training, LieType) %>% 
       select(-isLie_revpairwise)
@@ -1080,7 +1093,8 @@ tmp %>%
       )
   ) +
   guides(slab_alpha = "none") +
-  facet_grid(Parameter~t, scales = "free")
+  facet_grid(Parameter~t, scales = "free") +
+  theme(legend.position = "none")
 ```
 
 ## Alternative parameterization
