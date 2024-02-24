@@ -83,6 +83,9 @@ theme_set(
 )
 bayesplot::color_scheme_set(scheme = "brewer-Spectral")
 options(digits = 3)
+knitr::opts_chunk$set(
+  
+)
 ```
 
 Next we set options for the bayesian model estimation procedures. We use as many cores as are available on the machine.
@@ -151,8 +154,6 @@ We can then display these proportions correct as a simple histogram.
 
 ```{r}
 #| label: fig-data-hist
-#| fig-width: 4
-#| fig-height: 3
 #| fig-cap: Histogram of proportions correct.
 
 d_accuracy_participant %>%
@@ -204,7 +205,6 @@ We visualize the basic SDT framework for deception tasks in @fig-sdt-example. Th
 ```{r}
 #| label: fig-sdt-example
 #| fig-height: 3
-#| fig-width: 6
 #| fig-cap: Illustration of the basic SDT model.
 
 sdt_draw <- function(d, crit) {
@@ -247,6 +247,7 @@ sdt_draw <- function(d, crit) {
     annotate(
       geom = "text",
       x = 3, y = 0.53,
+      size = 3.4,
       label = "Criterion"
     ) +
     # Sensitivity
@@ -264,6 +265,7 @@ sdt_draw <- function(d, crit) {
     annotate(
       geom = "text",
       x = 3.3, y = 0.87,
+      size = 3.4,
       label = "Discriminability"
     ) +
     theme(
@@ -359,8 +361,6 @@ In these example data, sensitivity was not statistically significantly different
 
 ```{r}
 #| label: fig-sdt-example-2
-#| fig-height: 3
-#| fig-width: 6
 #| fig-cap: "SDT model estimated from example data: The implied evidence distributions for lie and truth trials. As is seen, the distributions overlap completely and thus sensitivity is at zero. Criterion is above zero, so on average, 'lie' responses are less likely; this is often called a conservative criterion (to respond with 'lie')."
 sdt_draw(mean(sdt$dprime), mean(sdt$crit))
 ```
@@ -369,8 +369,6 @@ We can also visualize the participants' parameters. Note that there were very fe
 
 ```{r}
 #| label: fig-sdt-person-parameters
-#| fig-width: 4
-#| fig-height: 4
 #| fig-cap: Scatterplot of participant-specific criterion and sensitivity parameters.
 sdt %>% 
   ggplot(aes(crit, dprime)) +
@@ -396,8 +394,6 @@ Proportion corrects are sometimes very similar to d-primes (@fig-sdt-person-accu
 
 ```{r}
 #| label: fig-sdt-person-accuracy
-#| fig-width: 8
-#| fig-height: 3
 #| fig-cap: Scatterplot of participant-specific sensitivity and accuracy (proportion correct) parameters.
 pa <- left_join(
   sdt,
@@ -494,7 +490,6 @@ Another way to do this is to visually see whether the four chains of samples are
 ```{r}
 #| label: fig-mcmc-caterpillar
 #| fig-cap: Caterpillar plots of the main parameters' mcmc chains.
-#| fig-width: 8
 mcmc_plot(m0, type = "trace") +
   theme(legend.position = "bottom")
 ```
@@ -503,9 +498,8 @@ Similarly, we want to see evidence that the model is able to reproduce the obser
 
 ```{r}
 #| label: fig-pp-check
-#| fig-cap: Posterior predictive check.
-#| fig-width: 8
 #| fig-height: 4
+#| fig-cap: Posterior predictive check.
 pp_check(m0, type = "bars_grouped", group = "isLie", ndraws = 100) + 
   scale_x_continuous(breaks = c(0, 1), labels = c("No", "Yes"))
 ```
@@ -534,8 +528,7 @@ The above numbers are the posterior means and 95%CIs. Those are calculated from 
 
 ```{r}
 #| label: fig-m0-3
-#| fig-width: 4
-#| fig-height: 2
+#| fig-height: 3
 #| fig-cap: Estimated parameters' posterior distributions for Model 0.
 
 gather_draws(m0, b_Intercept, b_isLie1) %>% 
@@ -638,8 +631,6 @@ parameters(m0nl, centrality = "mean")
 
 ```{r}
 #| label: fig-sdt-person-shrinkage
-#| fig-width: 4
-#| fig-height: 4
 #| fig-cap: Scatterplot of participant-specific criterion and sensitivity parameters as estimated by Model 0 (filled points) and manual calculation (empty points). Line segments connect parameter estimates from the two estimation methods to illustrate shrinkage.
 bind_rows(
   coef(m0)$Participant[,,1] %>% 
@@ -737,8 +728,6 @@ p_m0_coef_stimulus <- m0 %>%
 
 ```{r}
 #| label: fig-sdt-m0-varying
-#| fig-width: 7
-#| fig-height: 4
 #| fig-cap: Caterpillar plots of participant- (left two panels) and stimulus-specific (right panel) parameters. We show participant-specific parameters for a random sample of 20 participants to reduce overplotting.
 
 (p_m0_coef_participant | p_m0_coef_stimulus) &
